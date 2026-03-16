@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>萌萌仓鼠大作战 (Hamster Smash)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #87CEEB;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            transform: scaleX(-1);
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+
+        .video-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        #score-board {
+            font-size: 3rem;
+            font-weight: 900;
+            color: #fbbf24;
+            text-shadow: 3px 3px 0px #b45309, -1px -1px 0 #fff;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px 40px;
+            border-radius: 50px;
+            align-self: flex-start;
+            border: 4px solid #fff;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+
+        #score-board-p2 {
+            font-size: 3rem;
+            font-weight: 900;
+            color: #60a5fa;
+            text-shadow: 3px 3px 0px #1e40af, -1px -1px 0 #fff;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px 40px;
+            border-radius: 50px;
+            border: 4px solid #fff;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            display: none;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.5rem;
+            color: white;
+            background: rgba(0,0,0,0.85);
+            padding: 40px;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            z-index: 20;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 80%;
+            text-align: center;
+        }
+
+        .spinner {
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 5px solid #f97316;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.97);
+            padding: 40px 50px;
+            border-radius: 40px;
+            text-align: center;
+            pointer-events: auto;
+            border: 8px solid #f97316;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            max-width: 90%;
+            width: 520px;
+            z-index: 30;
+        }
+
+        .mode-btn {
+            display: block;
+            width: 100%;
+            padding: 18px 20px;
+            margin-bottom: 16px;
+            border-radius: 24px;
+            font-size: 1.3rem;
+            font-weight: 800;
+            border: 4px solid white;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            transition: transform 0.15s, box-shadow 0.15s;
+            color: white;
+            text-align: left;
+        }
+        .mode-btn:hover { transform: scale(1.03); box-shadow: 0 6px 25px rgba(0,0,0,0.25); }
+        .mode-btn:active { transform: scale(0.97); }
+
+        .mode-btn .mode-title { font-size: 1.4rem; display: block; }
+        .mode-btn .mode-desc { font-size: 0.85rem; font-weight: 500; opacity: 0.9; display: block; margin-top: 4px; }
+
+        .timer-style {
+            font-size: 3rem;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 3px 3px 0px #b45309, -1px -1px 0 #fbbf24;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px 40px;
+            border-radius: 50px;
+            border: 4px solid #fff;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            display: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(to bottom, #fb923c, #ea580c);
+            color: white;
+            font-weight: 900;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 1.5rem;
+            border: 4px solid white;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            width: 100%;
+        }
+        .btn-primary:hover { filter: brightness(1.1); }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .btn-secondary {
+            background: linear-gradient(to bottom, #94a3b8, #64748b);
+            color: white;
+            font-weight: 800;
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            border: 3px solid white;
+            cursor: pointer;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+            width: 100%;
+            margin-top: 10px;
+        }
+        .btn-secondary:hover { filter: brightness(1.1); }
+
+        .name-input {
+            width: 100%;
+            padding: 15px 20px;
+            font-size: 1.3rem;
+            border: 4px solid #f97316;
+            border-radius: 20px;
+            outline: none;
+            text-align: center;
+            box-sizing: border-box;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .name-input:focus { border-color: #ea580c; box-shadow: 0 0 0 3px rgba(249,115,22,0.2); }
+
+        .infinite-score-display {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            pointer-events: auto;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <video id="input_video" class="video-hidden" autoplay muted playsinline></video>
+    <canvas id="output_canvas"></canvas>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <div class="font-bold mt-4" id="loading-text">引擎启动中，请允许使用摄像头...</div>
+        <div style="font-size: 0.95rem; color: #ccc; margin-top: 10px;">如果长时间卡住，请确保网页是在 http/https 环境下运行</div>
+    </div>
+
+    <div id="ui-layer">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div id="score-board" style="display:none;">P1: 0</div>
+            <div id="timer-board" class="timer-style"></div>
+            <div id="score-board-p2">P2: 0</div>
+        </div>
+
+        <!-- 模式选择 -->
+        <div id="mode-select-modal" class="modal-overlay" style="display:none; width:560px;">
+            <h1 style="font-size:2.8rem;font-weight:900;color:#f97316;margin-bottom:6px;-webkit-text-stroke:1px white;">仓鼠大作战!</h1>
+            <div style="text-align:left;margin-bottom:20px;padding:0 10px;">
+                <p style="font-size:1rem;color:#666;margin-bottom:4px;">✊ <b>握紧拳头(P1)</b>：召唤 <span style="color:#ef4444;font-weight:bold;">红锤子</span></p>
+                <p style="font-size:1rem;color:#666;margin-bottom:4px;">✌️ <b>剪刀手势(P2)</b>：召唤 <span style="color:#3b82f6;font-weight:bold;">蓝锤子</span></p>
+                <p style="font-size:1rem;color:#666;margin-bottom:4px;">⬇️ <b>保持手势+快速下挥</b>：重击!</p>
+            </div>
+            <button id="mode-quickplay-btn" class="mode-btn" style="background:linear-gradient(135deg,#f97316,#ea580c);">
+                <span class="mode-title">⚡ 快速挑战 (Quick Play)</span>
+                <span class="mode-desc">单人模式 · 60秒倒计时 · 拳头粉碎仓鼠!</span>
+            </button>
+            <button id="mode-battle-btn" class="mode-btn" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
+                <span class="mode-title">⚔️ 双人对战 (Battle)</span>
+                <span class="mode-desc">红锤子 vs 蓝锤子 · 60秒 · 谁打得更多?</span>
+            </button>
+            <button id="mode-infinite-btn" class="mode-btn" style="background:linear-gradient(135deg,#10b981,#047857);">
+                <span class="mode-title">♾️ 无限模式 (Infinite)</span>
+                <span class="mode-desc">无时间限制 · 尽情享受 · 随时退出</span>
+            </button>
+        </div>
+
+        <!-- 结算界面 1 (单人) -->
+        <div id="game-over-modal" class="modal-overlay" style="width:480px;">
+            <h1 style="font-size:3rem;font-weight:900;color:#f97316;margin-bottom:10px;">游戏结束!</h1>
+            <p id="final-score" style="font-size:2rem;font-weight:700;color:#333;margin-bottom:20px;">最终得分: 0</p>
+            <input id="player-name" type="text" maxlength="20" placeholder="输入你的名字..." class="name-input" />
+            <button id="submit-score-btn" class="btn-primary">提交分数</button>
+            <button id="skip-score-btn" class="btn-secondary">跳过 (Skip)</button>
+            <p id="submit-error" style="color:#dc2626;margin-top:10px;display:none;font-weight:600;"></p>
+        </div>
+
+        <!-- 结算界面 2 (对战) -->
+        <div id="battle-over-modal" class="modal-overlay" style="width:520px;">
+            <h1 style="font-size:2.5rem;font-weight:900;color:#f97316;margin-bottom:10px;">对战结束!</h1>
+            <div id="battle-result" style="font-size:1.8rem;font-weight:800;margin-bottom:8px;"></div>
+            <div style="display:flex;gap:16px;margin-bottom:15px;">
+                <div style="flex:1;background:#fff7ed;border-radius:16px;padding:15px;border:3px solid #ef4444;">
+                    <div style="font-weight:800;color:#ef4444;font-size:1.1rem;">P1 (✊ 红锤)</div>
+                    <div id="battle-p1-score" style="font-size:2rem;font-weight:900;color:#dc2626;">0</div>
+                    <input id="battle-p1-name" type="text" maxlength="20" placeholder="P1 名字..." class="name-input" style="font-size:1rem;padding:10px;margin-bottom:0;border-color:#ef4444;" />
+                </div>
+                <div style="flex:1;background:#eff6ff;border-radius:16px;padding:15px;border:3px solid #3b82f6;">
+                    <div style="font-weight:800;color:#3b82f6;font-size:1.1rem;">P2 (✌️ 蓝锤)</div>
+                    <div id="battle-p2-score" style="font-size:2rem;font-weight:900;color:#1d4ed8;">0</div>
+                    <input id="battle-p2-name" type="text" maxlength="20" placeholder="P2 名字..." class="name-input" style="font-size:1rem;padding:10px;border-color:#3b82f6;margin-bottom:0;" />
+                </div>
+            </div>
+            <button id="battle-submit-btn" class="btn-primary">提交分数</button>
+            <button id="battle-skip-btn" class="btn-secondary">跳过 (Skip)</button>
+            <p id="battle-submit-error" style="color:#dc2626;margin-top:10px;display:none;font-weight:600;"></p>
+        </div>
+
+        <!-- 排行榜 -->
+        <div id="leaderboard-modal" class="modal-overlay" style="max-height:80vh;overflow-y:auto;">
+            <h1 style="font-size:2.5rem;font-weight:900;color:#f97316;margin-bottom:5px;">🏆 排行榜</h1>
+            <p id="leaderboard-my-score" style="font-size:1.2rem;color:#666;margin-bottom:15px;"></p>
+            <div id="leaderboard-list" style="text-align:left;"></div>
+            <button id="play-again-btn" class="btn-primary" style="margin-top:20px;">再玩一次!</button>
+            <button id="back-to-menu-btn" class="btn-secondary">返回菜单</button>
+        </div>
+
+        <!-- 无限模式返回按钮 -->
+        <div id="infinite-controls" class="infinite-score-display">
+            <button id="infinite-back-btn" style="background:rgba(0,0,0,0.5);color:white;font-weight:700;padding:12px 30px;border-radius:50px;font-size:1.1rem;border:3px solid rgba(255,255,255,0.5);cursor:pointer;backdrop-filter:blur(8px);">🏠 返回菜单</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 游戏配置参数 ---
+    const HAMSTER_SPAWN_INTERVAL = 1200;
+    const HAMSTER_MIN_STAY_TIME = 500;
+    const HAMSTER_MAX_STAY_TIME = 1000;
+    const HOLE_COUNT = 7;
+    const PUNCH_VELOCITY_THRESHOLD = 8;
+    const GAME_DURATION = 60;
+
+    const MODE_QUICKPLAY = 'quickplay';
+    const MODE_BATTLE = 'battle';
+    const MODE_INFINITE = 'infinite';
+
+    let currentMode = null;
+    let scoreP1 = 0;
+    let scoreP2 = 0;
+    let gameActive = false;
+    let timeLeft = GAME_DURATION;
+    let timerInterval = null;
+    let lastSpawnTime = 0;
+    let holes = [];
+    let particles = [];
+    let clouds = [];
+    let birds = [];
+    let grassBlades = [];
+    let handsResults = null;
+    let canvas, ctx;
+    let videoElement;
+    let width, height;
+    let frameCount = 0;
+    let lastRenderTime = 0;
+
+    let prevHandY = {};
+
+    // --- 音频系统 ---
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let bgmInterval = null;
+    let bgmNoteIndex = 0;
+
+    function createNoiseBuffer() {
+        const bufferSize = audioCtx.sampleRate * 2;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        return buffer;
+    }
+    const noiseBuffer = createNoiseBuffer();
+
+    function playSound(type) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const t = audioCtx.currentTime;
+        if (type === 'hit') {
+            const noiseSrc = audioCtx.createBufferSource();
+            noiseSrc.buffer = noiseBuffer;
+            const noiseFilter = audioCtx.createBiquadFilter();
+            noiseFilter.type = 'lowpass';
+            noiseFilter.frequency.value = 1000;
+            const noiseGain = audioCtx.createGain();
+            noiseGain.gain.setValueAtTime(0.8, t);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+            noiseSrc.connect(noiseFilter);
+            noiseFilter.connect(noiseGain);
+            noiseGain.connect(audioCtx.destination);
+            noiseSrc.start(t);
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1200, t);
+            osc.frequency.exponentialRampToValueAtTime(1800, t + 0.1);
+            gain.gain.setValueAtTime(0.3, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(t);
+            osc.stop(t + 0.15);
+        } else if (type === 'hit_p2') {
+            const noiseSrc = audioCtx.createBufferSource();
+            noiseSrc.buffer = noiseBuffer;
+            const noiseFilter = audioCtx.createBiquadFilter();
+            noiseFilter.type = 'bandpass';
+            noiseFilter.frequency.value = 1500;
+            const noiseGain = audioCtx.createGain();
+            noiseGain.gain.setValueAtTime(0.7, t);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.18);
+            noiseSrc.connect(noiseFilter);
+            noiseFilter.connect(noiseGain);
+            noiseGain.connect(audioCtx.destination);
+            noiseSrc.start(t);
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(900, t);
+            osc.frequency.exponentialRampToValueAtTime(1400, t + 0.12);
+            gain.gain.setValueAtTime(0.2, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.12);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(t);
+            osc.stop(t + 0.12);
+        } else if (type === 'spawn') {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(600, t);
+            osc.frequency.exponentialRampToValueAtTime(900, t + 0.1);
+            gain.gain.setValueAtTime(0.2, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(t);
+            osc.stop(t + 0.1);
+        }
+    }
+
+    function startMusic() {
+        if (bgmInterval) return;
+        const tempo = 140;
+        const beatLen = 60 / tempo;
+        const bassNotes = [196.00, 220.00, 246.94, 261.63, 196.00, 261.63, 146.83, 261.63];
+
+        bgmInterval = setInterval(() => {
+            if (audioCtx.state === 'suspended') return;
+            const t = audioCtx.currentTime;
+            const bassOsc = audioCtx.createOscillator();
+            const bassGain = audioCtx.createGain();
+            bassOsc.type = 'triangle';
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 400;
+            const freq = bassNotes[bgmNoteIndex % bassNotes.length];
+            bassOsc.frequency.setValueAtTime(freq, t);
+            bassGain.gain.setValueAtTime(0.15, t);
+            bassGain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+            bassOsc.connect(filter);
+            filter.connect(bassGain);
+            bassGain.connect(audioCtx.destination);
+            bassOsc.start(t);
+            bassOsc.stop(t + 0.25);
+
+            if (Math.random() > 0.4) {
+                const trebleOsc = audioCtx.createOscillator();
+                const trebleGain = audioCtx.createGain();
+                trebleOsc.type = 'sine';
+                const scale = [523.25, 587.33, 659.25, 698.46, 783.99, 880.00];
+                const note = scale[Math.floor(Math.random() * scale.length)];
+                trebleOsc.frequency.setValueAtTime(note, t);
+                trebleGain.gain.setValueAtTime(0.08, t);
+                trebleGain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+                trebleOsc.connect(trebleGain);
+                trebleGain.connect(audioCtx.destination);
+                trebleOsc.start(t);
+                trebleOsc.stop(t + 0.15);
+            }
+            bgmNoteIndex++;
+        }, beatLen * 1000);
+    }
+
+    // --- 游戏流程 ---
+
+    function startTimer() {
+        timeLeft = GAME_DURATION;
+        const timerBoard = document.getElementById('timer-board');
+        timerBoard.style.display = 'block';
+        timerBoard.style.color = '#fff';
+        timerBoard.textContent = '⏱️ ' + timeLeft;
+
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            timerBoard.textContent = '⏱️ ' + timeLeft;
+            if (timeLeft <= 10) timerBoard.style.color = '#ef4444';
+            if (timeLeft <= 0) endGame();
+        }, 1000);
+    }
+
+    function stopTimer() {
+        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        document.getElementById('timer-board').style.display = 'none';
+    }
+
+    function stopMusic() {
+        if (bgmInterval) { clearInterval(bgmInterval); bgmInterval = null; bgmNoteIndex = 0; }
+    }
+
+    function endGame() {
+        stopTimer();
+        stopMusic();
+        gameActive = false;
+        holes.forEach(h => { if (h.character.state !== 'hidden') h.character.state = 'sinking_fast'; });
+
+        if (currentMode === MODE_QUICKPLAY) {
+            document.getElementById('final-score').textContent = '最终得分: ' + scoreP1;
+            document.getElementById('player-name').value = '';
+            document.getElementById('submit-error').style.display = 'none';
+            document.getElementById('game-over-modal').style.display = 'block';
+            document.getElementById('player-name').focus();
+        } else if (currentMode === MODE_BATTLE) {
+            document.getElementById('battle-p1-score').textContent = scoreP1;
+            document.getElementById('battle-p2-score').textContent = scoreP2;
+            const resultEl = document.getElementById('battle-result');
+            if (scoreP1 > scoreP2) { resultEl.textContent = '🎉 P1 (✊) 获胜!'; resultEl.style.color = '#ef4444'; }
+            else if (scoreP2 > scoreP1) { resultEl.textContent = '🎉 P2 (✌️) 获胜!'; resultEl.style.color = '#3b82f6'; }
+            else { resultEl.textContent = '🤝 平局!'; resultEl.style.color = '#666'; }
+            document.getElementById('battle-p1-name').value = '';
+            document.getElementById('battle-p2-name').value = '';
+            document.getElementById('battle-submit-error').style.display = 'none';
+            document.getElementById('battle-over-modal').style.display = 'block';
+        }
+    }
+
+    function updateScoreBoard() {
+        const boardP1 = document.getElementById('score-board');
+        if (currentMode === MODE_BATTLE) {
+            boardP1.innerText = 'P1 ✊: ' + scoreP1;
+            document.getElementById('score-board-p2').innerText = 'P2 ✌️: ' + scoreP2;
+        } else {
+            boardP1.innerText = '分数: ' + scoreP1;
+        }
+    }
+
+    // --- 排行榜系统 ---
+    async function submitScore(name, finalScore, mode) {
+        return new Promise((resolve) => {
+            const key = 'hamster_scores_' + (mode || MODE_QUICKPLAY);
+            let scores = JSON.parse(localStorage.getItem(key) || '[]');
+            scores.push({ name: name, score: finalScore, timestamp: Date.now() });
+            scores.sort((a, b) => b.score - a.score);
+            scores = scores.slice(0, 15);
+            localStorage.setItem(key, JSON.stringify(scores));
+            resolve({ success: true });
+        });
+    }
+
+    async function fetchScores(mode) {
+        return new Promise((resolve) => {
+            const key = 'hamster_scores_' + (mode || MODE_QUICKPLAY);
+            const scores = JSON.parse(localStorage.getItem(key) || '[]');
+            resolve(scores);
+        });
+    }
+
+    function renderLeaderboard(scores, highlightEntries, modeName) {
+        const listEl = document.getElementById('leaderboard-list');
+        const myScoreEl = document.getElementById('leaderboard-my-score');
+
+        if (highlightEntries.length === 1) {
+            myScoreEl.textContent = highlightEntries[0].name + ' 的得分: ' + highlightEntries[0].score + ' 分';
+        } else if (highlightEntries.length === 2) {
+            myScoreEl.textContent = 'P1 ' + highlightEntries[0].name + ': ' + highlightEntries[0].score + ' · ' +
+                'P2 ' + highlightEntries[1].name + ': ' + highlightEntries[1].score;
+        } else {
+            myScoreEl.textContent = modeName || '';
+        }
+
+        if (!scores || scores.length === 0) {
+            listEl.innerHTML = '<p style="text-align:center;color:#999;padding:20px;">暂无记录</p>';
+            return;
+        }
+
+        let html = '<table style="width:100%;border-collapse:collapse;">';
+        html += '<thead><tr style="border-bottom:3px solid #f97316;">' +
+            '<th style="padding:10px 8px;text-align:center;color:#f97316;font-size:1.1rem;">排名</th>' +
+            '<th style="padding:10px 8px;text-align:left;color:#f97316;font-size:1.1rem;">玩家</th>' +
+            '<th style="padding:10px 8px;text-align:right;color:#f97316;font-size:1.1rem;">分数</th>' +
+            '</tr></thead><tbody>';
+
+        const medals = ['🥇', '🥈', '🥉'];
+        const highlightNames = new Set(highlightEntries.map(e => e.name + ':' + e.score));
+        let highlightedSet = new Set();
+
+        scores.forEach((entry, i) => {
+            const key = entry.name + ':' + entry.score;
+            const isMe = highlightNames.has(key) && !highlightedSet.has(key);
+            if (isMe) highlightedSet.add(key);
+            const bg = isMe ? 'background:#fff7ed;' : (i % 2 === 0 ? 'background:#fafafa;' : '');
+            const bold = isMe ? 'font-weight:800;' : '';
+            const rankDisplay = i < 3 ? medals[i] : (i + 1);
+            html += '<tr style="border-bottom:1px solid #eee;' + bg + '">' +
+                '<td style="padding:10px 8px;text-align:center;font-size:1.2rem;' + bold + '">' + rankDisplay + '</td>' +
+                '<td style="padding:10px 8px;text-align:left;font-size:1.1rem;' + bold + '">' + entry.name.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</td>' +
+                '<td style="padding:10px 8px;text-align:right;font-size:1.1rem;font-weight:700;color:#f97316;' + bold + '">' + entry.score + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table>';
+        listEl.innerHTML = html;
+    }
+
+    async function showLeaderboard(highlightEntries, mode) {
+        try {
+            const scores = await fetchScores(mode);
+            const modeLabel = mode === MODE_BATTLE ? '双人对战排行榜' : '快速挑战排行榜';
+            renderLeaderboard(scores, highlightEntries, modeLabel);
+        } catch (err) {
+            renderLeaderboard([], highlightEntries, '');
+        }
+        document.getElementById('leaderboard-modal').style.display = 'block';
+    }
+
+    // --- 视觉渲染类 ---
+    class Bird {
+        constructor() {
+            this.x = Math.random() * width; this.y = Math.random() * (height * 0.3);
+            this.speed = 1 + Math.random() * 2; this.size = 2 + Math.random() * 2;
+            this.flapSpeed = 0.1 + Math.random() * 0.1; this.wingOffset = Math.random() * Math.PI;
+        }
+        update() {
+            this.x += this.speed;
+            if (this.x > width + 20) { this.x = -20; this.y = Math.random() * (height * 0.3); }
+            this.wingOffset += this.flapSpeed;
+        }
+        draw(ctx) {
+            ctx.save(); ctx.translate(this.x, this.y); ctx.strokeStyle = 'white'; ctx.lineWidth = 1.5; ctx.beginPath();
+            let flapY = Math.sin(this.wingOffset) * 5;
+            ctx.moveTo(-5 * this.size, -flapY); ctx.quadraticCurveTo(0, 0, 0, 2); ctx.quadraticCurveTo(0, 0, 5 * this.size, -flapY);
+            ctx.stroke(); ctx.restore();
+        }
+    }
+
+    class Particle {
+        constructor(x, y, color, type='circle') {
+            this.x = x; this.y = y;
+            const angle = Math.random() * Math.PI * 2; const speed = Math.random() * 10 + 2;
+            this.vx = Math.cos(angle) * speed; this.vy = Math.sin(angle) * speed - 2;
+            this.life = 1.0; this.color = color; this.size = Math.random() * 6 + 3;
+            this.type = type; this.rot = Math.random() * Math.PI; this.rotSpeed = (Math.random() - 0.5) * 0.4;
+        }
+        update() { this.x += this.vx; this.y += this.vy; this.life -= 0.03; this.vy += 0.5; this.rot += this.rotSpeed; }
+        draw(ctx) {
+            ctx.save(); ctx.globalAlpha = Math.max(0, this.life); ctx.translate(this.x, this.y); ctx.rotate(this.rot); ctx.fillStyle = this.color;
+            if (this.type === 'star') drawStar(ctx, 0, 0, 5, this.size, this.size/2);
+            else { ctx.beginPath(); ctx.arc(0, 0, this.size, 0, Math.PI * 2); ctx.fill(); }
+            ctx.restore();
+        }
+    }
+
+    function drawStar(ctx, cx, cy, spikes, outerRadius, innerRadius) {
+        let rot = Math.PI / 2 * 3; let x = cx; let y = cy; let step = Math.PI / spikes;
+        ctx.beginPath(); ctx.moveTo(cx, cy - outerRadius);
+        for (let i = 0; i < spikes; i++) {
+            x = cx + Math.cos(rot) * outerRadius; y = cy + Math.sin(rot) * outerRadius; ctx.lineTo(x, y); rot += step;
+            x = cx + Math.cos(rot) * innerRadius; y = cy + Math.sin(rot) * innerRadius; ctx.lineTo(x, y); rot += step;
+        }
+        ctx.lineTo(cx, cy - outerRadius); ctx.closePath(); ctx.fill();
+    }
+
+    class Hole {
+        constructor(x, y, scale) {
+            this.x = x; this.y = y; this.scale = scale; this.character = new CuteHamster(this);
+            this.frontGrass = []; this.initFrontGrass();
+        }
+        initFrontGrass() {
+            const w = 130 * this.scale;
+            for(let i = -w*0.8; i < w*0.8; i += 10 * this.scale) {
+                this.frontGrass.push({ xOffset: i, h: (15 + Math.random() * 10) * this.scale, lean: (Math.random() - 0.5) * 10 });
+            }
+        }
+        drawBack(ctx) {
+            const w = 120 * this.scale; const h = 45 * this.scale;
+            ctx.save(); ctx.translate(this.x, this.y);
+            ctx.fillStyle = '#8B5A2B'; ctx.beginPath(); ctx.ellipse(0, 5*this.scale, w*1.2, h*1.4, 0, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#3E2723'; ctx.beginPath(); ctx.ellipse(0, 0, w, h, 0, 0, Math.PI*2); ctx.fill();
+            let grd = ctx.createRadialGradient(0, 5*this.scale, w*0.2, 0, 5*this.scale, w);
+            grd.addColorStop(0, '#000'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grd; ctx.beginPath(); ctx.ellipse(0, 5*this.scale, w, h, 0, 0, Math.PI*2); ctx.fill();
+            ctx.restore();
+        }
+        drawFront(ctx) {
+            const w = 130 * this.scale;
+            ctx.save(); ctx.translate(this.x, this.y);
+            ctx.lineWidth = 6 * this.scale; ctx.strokeStyle = '#271612'; ctx.beginPath();
+            ctx.ellipse(0, 0, 120 * this.scale, 45 * this.scale, 0, 0, Math.PI, false); ctx.stroke();
+            ctx.translate(0, 15 * this.scale); ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 4 * this.scale; ctx.lineCap = 'round';
+            this.frontGrass.forEach(blade => {
+                ctx.beginPath(); ctx.moveTo(blade.xOffset, 5);
+                ctx.quadraticCurveTo(blade.xOffset + blade.lean, -blade.h/2, blade.xOffset + blade.lean*2, -blade.h); ctx.stroke();
+            });
+            if (Math.abs(this.x % 5) < 1) drawFlower(ctx, w*0.7, 0, this.scale);
+            ctx.restore();
+        }
+    }
+
+    function drawFlower(ctx, x, y, scale) {
+        ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
+        ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0, -20); ctx.stroke();
+        ctx.fillStyle = 'white';
+        for(let i=0; i<5; i++) { ctx.beginPath(); ctx.rotate(Math.PI*2/5); ctx.ellipse(0, -25, 5, 8, 0, 0, Math.PI*2); ctx.fill(); }
+        ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(0, -25, 6, 0, Math.PI*2); ctx.fill(); ctx.restore();
+    }
+
+    class CuteHamster {
+        constructor(hole) {
+            this.hole = hole; this.state = 'hidden'; this.yOffset = 0; this.timer = 0; this.shakeX = 0; this.shakeY = 0;
+        }
+        update(dt) {
+            this.shakeX = 0; this.shakeY = 0;
+            if (this.state === 'hidden') return;
+            if (this.state === 'rising') {
+                this.yOffset += 0.04;
+                if (this.yOffset >= 0.7) { this.yOffset = 0.7; this.state = 'active'; }
+            } else if (this.state === 'active') {
+                this.timer -= dt; this.yOffset = 0.7 + Math.sin(Date.now() / 200) * 0.01;
+                if (this.timer <= 0) this.state = 'sinking';
+            } else if (this.state === 'hit') {
+                this.timer -= dt;
+                this.shakeX = (Math.random() - 0.5) * 15 * this.hole.scale; this.shakeY = (Math.random() - 0.5) * 15 * this.hole.scale;
+                if (this.timer <= 0) this.state = 'sinking_fast';
+            } else if (this.state === 'sinking') {
+                this.yOffset -= 0.03; if (this.yOffset <= 0) { this.yOffset = 0; this.state = 'hidden'; }
+            } else if (this.state === 'sinking_fast') {
+                this.yOffset -= 0.15; if (this.yOffset <= 0) { this.yOffset = 0; this.state = 'hidden'; }
+            }
+        }
+        draw(ctx) {
+            if (this.yOffset <= 0) return;
+            const scale = this.hole.scale; const baseSize = 100 * scale; const heightAmt = 140 * scale * this.yOffset;
+            ctx.save();
+            ctx.translate(this.hole.x, this.hole.y);
+            const holeW = 120 * scale; const holeH = 45 * scale;
+            ctx.beginPath();
+            ctx.moveTo(-holeW * 2, -1000 * scale); ctx.lineTo(holeW * 2, -1000 * scale); ctx.lineTo(holeW * 2, 0); ctx.lineTo(holeW, 0);
+            ctx.ellipse(0, 0, holeW, holeH, 0, 0, Math.PI, false); ctx.lineTo(-holeW * 2, 0); ctx.closePath(); ctx.clip();
+            ctx.translate(this.shakeX, 25*scale + this.shakeY - heightAmt);
+
+            const furColor = '#fde047'; const bellyColor = '#fef9c3'; const earColor = '#fca5a5';
+            ctx.fillStyle = furColor; ctx.beginPath(); ctx.ellipse(0, baseSize*0.4, baseSize*0.6, baseSize*0.9, 0, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = bellyColor; ctx.beginPath(); ctx.ellipse(0, baseSize*0.5, baseSize*0.4, baseSize*0.7, 0, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = furColor; ctx.beginPath(); ctx.arc(-baseSize*0.4, -baseSize*0.3, baseSize*0.2, 0, Math.PI*2); ctx.arc(baseSize*0.4, -baseSize*0.3, baseSize*0.2, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = earColor; ctx.beginPath(); ctx.arc(-baseSize*0.4, -baseSize*0.3, baseSize*0.12, 0, Math.PI*2); ctx.arc(baseSize*0.4, -baseSize*0.3, baseSize*0.12, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = furColor; ctx.beginPath(); ctx.ellipse(-baseSize*0.2, baseSize*0.5, baseSize*0.15, baseSize*0.1, Math.PI/4, 0, Math.PI*2); ctx.ellipse(baseSize*0.2, baseSize*0.5, baseSize*0.15, baseSize*0.1, -Math.PI/4, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#d97706'; ctx.beginPath(); ctx.ellipse(0, baseSize*0.5, baseSize*0.15, baseSize*0.25, 0, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#92400e'; ctx.lineWidth = 2 * scale; ctx.beginPath(); ctx.moveTo(0, baseSize*0.3); ctx.lineTo(0, baseSize*0.7); ctx.moveTo(-baseSize*0.05, baseSize*0.3); ctx.lineTo(-baseSize*0.05, baseSize*0.7); ctx.moveTo(baseSize*0.05, baseSize*0.3); ctx.lineTo(baseSize*0.05, baseSize*0.7); ctx.stroke();
+
+            if (this.state === 'hit' || this.state === 'sinking_fast') {
+                ctx.strokeStyle = '#333'; ctx.lineWidth = 3 * scale; ctx.lineCap = 'round';
+                ctx.beginPath(); ctx.moveTo(-baseSize*0.3, -baseSize*0.1); ctx.lineTo(-baseSize*0.1, 0.1*baseSize); ctx.moveTo(-baseSize*0.1, -baseSize*0.1); ctx.lineTo(-baseSize*0.3, 0.1*baseSize); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(baseSize*0.1, -baseSize*0.1); ctx.lineTo(baseSize*0.3, 0.1*baseSize); ctx.moveTo(baseSize*0.3, -baseSize*0.1); ctx.lineTo(baseSize*0.1, 0.1*baseSize); ctx.stroke();
+                ctx.fillStyle = '#7f1d1d'; ctx.beginPath(); ctx.arc(0, baseSize*0.2, baseSize*0.1, 0, Math.PI*2); ctx.fill();
+            } else {
+                ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(-baseSize*0.2, 0, baseSize*0.12, 0, Math.PI*2); ctx.arc(baseSize*0.2, 0, baseSize*0.12, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-baseSize*0.25, -baseSize*0.05, baseSize*0.04, 0, Math.PI*2); ctx.arc(baseSize*0.15, -baseSize*0.05, baseSize*0.04, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = earColor; ctx.beginPath(); ctx.ellipse(0, 0.1*baseSize, baseSize*0.08, baseSize*0.06, 0, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle = '#333'; ctx.lineWidth = 2 * scale; ctx.beginPath(); ctx.arc(0, baseSize*0.15, baseSize*0.15, 0.2, Math.PI-0.2); ctx.stroke();
+                ctx.fillStyle = '#fff'; ctx.fillRect(-baseSize*0.05, baseSize*0.28, baseSize*0.1, baseSize*0.08);
+                ctx.fillStyle = 'rgba(252, 165, 165, 0.5)'; ctx.beginPath(); ctx.arc(-baseSize*0.35, 0.15*baseSize, baseSize*0.1, 0, Math.PI*2); ctx.arc(baseSize*0.35, 0.15*baseSize, baseSize*0.1, 0, Math.PI*2); ctx.fill();
+            }
+            ctx.restore();
+        }
+        spawn() {
+            if (this.state === 'hidden') {
+                this.state = 'rising'; this.yOffset = 0;
+                this.timer = HAMSTER_MIN_STAY_TIME + Math.random() * (HAMSTER_MAX_STAY_TIME - HAMSTER_MIN_STAY_TIME);
+                playSound('spawn');
+            }
+        }
+        checkHit(x, y, player) {
+            if (this.state !== 'active' && this.state !== 'rising') return false;
+            const scale = this.hole.scale; const baseSize = 100 * scale; const heightAmt = 140 * scale * this.yOffset;
+            const currentY = this.hole.y - heightAmt + (baseSize*0.2);
+            const dx = x - this.hole.x; const dy = y - currentY;
+            if (dx*dx + dy*dy < (baseSize * 1.5) ** 2) {
+                this.state = 'hit'; this.timer = 500;
+                if (player === 2) {
+                    scoreP2 += 10; playSound('hit_p2');
+                    for(let i=0; i<10; i++) { particles.push(new Particle(this.hole.x, currentY, '#60a5fa', 'star')); particles.push(new Particle(this.hole.x, currentY, '#bfdbfe', 'circle')); }
+                    const boardP2 = document.getElementById('score-board-p2'); boardP2.style.transform = "scale(1.2)"; setTimeout(() => { boardP2.style.transform = "scale(1)"; }, 100);
+                } else {
+                    scoreP1 += 10; playSound('hit');
+                    for(let i=0; i<10; i++) { particles.push(new Particle(this.hole.x, currentY, '#ef4444', 'star')); particles.push(new Particle(this.hole.x, currentY, '#fff', 'circle')); }
+                    const boardP1 = document.getElementById('score-board'); boardP1.style.transform = "scale(1.2)"; setTimeout(() => { boardP1.style.transform = "scale(1)"; }, 100);
+                }
+                updateScoreBoard();
+                return true;
+            }
+            return false;
+        }
+    }
+
+    function initHoles() {
+        holes = []; let attempts = 0; const startY = height * 0.45; const endY = height * 0.9;
+        while(holes.length < HOLE_COUNT && attempts < 1000) {
+            attempts++; let x = Math.random() * (width * 0.8) + (width * 0.1); let y = Math.random() * (endY - startY) + startY;
+            let tooClose = false; for(let h of holes) { if (Math.hypot(h.x - x, h.y - y) < 160) { tooClose = true; break; } }
+            if (!tooClose) { let t = (y - startY) / (endY - startY); let scale = 0.5 + (t * 0.7); holes.push(new Hole(x, y, scale)); }
+        }
+        holes.sort((a,b) => a.y - b.y);
+    }
+    function initClouds() { clouds = []; for(let i=0; i<5; i++) clouds.push({ x: Math.random() * width, y: Math.random() * height * 0.4, scale: 0.5 + Math.random() * 1.5, speed: 0.2 + Math.random() * 0.3 }); }
+    function initBirds() { birds = []; for(let i=0; i<8; i++) birds.push(new Bird()); }
+    function generateGrass() { grassBlades = []; const startY = height * 0.35; const count = 300; for(let i=0; i<count; i++) grassBlades.push({ x: Math.random() * width, y: startY + Math.random() * (height - startY), h: 10 + Math.random() * 20, angle: (Math.random() - 0.5) * 0.5, color: Math.random() > 0.5 ? '#4ade80' : '#22c55e' }); grassBlades.sort((a,b) => a.y - b.y); }
+    function drawCloud(ctx, x, y, scale) { ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale); ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; ctx.beginPath(); ctx.arc(0, 0, 30, 0, Math.PI*2); ctx.arc(25, -10, 35, 0, Math.PI*2); ctx.arc(50, 0, 30, 0, Math.PI*2); ctx.arc(25, 10, 30, 0, Math.PI*2); ctx.fill(); ctx.restore(); }
+
+    // 全新封装的画锤子函数：支持红锤(P1)和蓝锤(P2)
+    function drawHammer(ctx, x, y, isPunching, isReady, colorType = 'red') {
+        if (!isReady) {
+            ctx.save(); ctx.translate(x, y); 
+            ctx.strokeStyle = colorType === 'red' ? 'rgba(239, 68, 68, 0.8)' : (colorType === 'blue' ? 'rgba(59, 130, 246, 0.8)' : 'rgba(255, 255, 255, 0.8)'); 
+            ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, 30, 0, Math.PI*2); 
+            ctx.moveTo(0, -40); ctx.lineTo(0, -20); ctx.moveTo(0, 20); ctx.lineTo(0, 40); 
+            ctx.moveTo(-40, 0); ctx.lineTo(-20, 0); ctx.moveTo(20, 0); ctx.lineTo(40, 0); 
+            ctx.stroke(); 
+            ctx.font = '20px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; 
+            ctx.fillText(colorType === 'red' ? '✊' : (colorType === 'blue' ? '✌️' : '🎯'), 0, 0);
+            ctx.restore(); return;
+        }
+
+        ctx.save(); ctx.translate(x, y); 
+        const targetRot = isPunching ? -Math.PI/1.5 : -Math.PI/8; 
+        ctx.rotate(targetRot); const scale = 1.2; ctx.scale(scale, scale);
+
+        // 木棒手柄
+        ctx.fillStyle = '#854d0e'; ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 5; 
+        ctx.beginPath(); ctx.roundRect(-10, -100, 20, 120, 10); ctx.fill(); ctx.shadowBlur = 0;
+
+        // 手柄防滑套
+        ctx.fillStyle = colorType === 'red' ? '#7f1d1d' : '#1e3a8a'; 
+        ctx.beginPath(); ctx.roundRect(-10, 0, 20, 30, 5); ctx.fill();
+
+        ctx.translate(0, -100);
+
+        // 锤头左侧
+        ctx.fillStyle = colorType === 'red' ? '#fca5a5' : '#93c5fd'; 
+        ctx.beginPath(); ctx.ellipse(-60, 0, 15, 35, 0, 0, Math.PI*2); ctx.fill();
+
+        // 锤头主体
+        let grd = ctx.createLinearGradient(-60, -35, 60, 35); 
+        if (colorType === 'red') {
+            grd.addColorStop(0, '#ef4444'); grd.addColorStop(0.5, '#991b1b'); grd.addColorStop(1, '#ef4444');
+        } else {
+            grd.addColorStop(0, '#3b82f6'); grd.addColorStop(0.5, '#1e40af'); grd.addColorStop(1, '#3b82f6');
+        }
+        ctx.fillStyle = grd; ctx.beginPath(); ctx.rect(-60, -35, 120, 70); ctx.fill();
+
+        // 锤头反光
+        ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.fillRect(-50, -25, 100, 10);
+
+        // 锤头右侧
+        ctx.fillStyle = colorType === 'red' ? '#fca5a5' : '#93c5fd'; 
+        ctx.beginPath(); ctx.ellipse(60, 0, 15, 35, 0, 0, Math.PI*2); ctx.fill();
+
+        if (isPunching) { 
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); 
+            ctx.moveTo(-70, -40); ctx.lineTo(-100, -70); 
+            ctx.moveTo(-80, 0); ctx.lineTo(-120, 0); 
+            ctx.moveTo(-70, 40); ctx.lineTo(-100, 70); 
+            ctx.stroke(); 
+        }
+        ctx.restore();
+    }
+
+    function drawScenery() {
+        let grdSky = ctx.createLinearGradient(0, 0, 0, height); grdSky.addColorStop(0, '#60A5FA'); grdSky.addColorStop(0.4, '#BAE6FD'); grdSky.addColorStop(0.4, '#86EFAC'); grdSky.addColorStop(1, '#15803D'); ctx.fillStyle = grdSky; ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = '#4ADE80'; ctx.beginPath(); ctx.moveTo(0, height*0.4); ctx.bezierCurveTo(width*0.3, height*0.35, width*0.7, height*0.45, width, height*0.4); ctx.lineTo(width, height); ctx.lineTo(0, height); ctx.fill();
+        birds.forEach(b => { b.update(); b.draw(ctx); });
+        clouds.forEach(c => { c.x += c.speed; if (c.x > width + 100) c.x = -100; drawCloud(ctx, c.x, c.y, c.scale); });
+        ctx.strokeStyle = 'rgba(21, 128, 61, 0.3)'; ctx.lineWidth = 2; grassBlades.forEach(g => { ctx.beginPath(); ctx.moveTo(g.x, g.y); ctx.lineTo(g.x + g.angle*10, g.y - g.h); ctx.stroke(); });
+    }
+
+    // --- 游戏独立主渲染循环 ---
+    function gameLoop(nowMs) {
+        if (!ctx) return;
+        
+        let dt = nowMs - lastRenderTime;
+        if (dt > 100) dt = 16; 
+        lastRenderTime = nowMs;
+        
+        frameCount++;
+        ctx.clearRect(0, 0, width, height);
+
+        drawScenery();
+
+        if (gameActive) {
+            if (nowMs - lastSpawnTime > HAMSTER_SPAWN_INTERVAL) {
+                const available = holes.filter(h => h.character.state === 'hidden');
+                if (available.length > 0) {
+                    const pick = available[Math.floor(Math.random() * available.length)];
+                    pick.character.spawn();
+                }
+                lastSpawnTime = nowMs;
+            }
+
+            holes.forEach(h => h.character.update(16)); 
+            particles.forEach((p, index) => {
+                p.update();
+                if (p.life <= 0) particles.splice(index, 1);
+            });
+        }
+
+        holes.forEach(hole => { hole.drawBack(ctx); hole.character.draw(ctx); hole.drawFront(ctx); });
+        particles.forEach(p => p.draw(ctx));
+
+        // 渲染玩家手部
+        if (handsResults && handsResults.multiHandLandmarks) {
+            handsResults.multiHandLandmarks.forEach((landmarks, index) => {
+                const anchor = landmarks[5];
+                const x = anchor.x * width;
+                const y = anchor.y * height;
+
+                const prevY = prevHandY[index] || y;
+                const vy = y - prevY;
+                prevHandY[index] = y;
+
+                const movingDownFast = vy > PUNCH_VELOCITY_THRESHOLD;
+
+                if (currentMode === MODE_BATTLE) {
+                    const fistFormed = isFist(landmarks);
+                    const scissorFormed = isScissor(landmarks);
+                    if (fistFormed) { // Player 1 (红锤)
+                        const isPunching = movingDownFast;
+                        if (isPunching && gameActive) holes.forEach(h => h.character.checkHit(x - 60, y + 20, 1));
+                        drawHammer(ctx, x, y, isPunching && gameActive, true, 'red');
+                    } else if (scissorFormed) { // Player 2 (蓝锤)
+                        const isPunching = movingDownFast;
+                        if (isPunching && gameActive) holes.forEach(h => h.character.checkHit(x - 60, y + 20, 2));
+                        drawHammer(ctx, x, y, isPunching && gameActive, true, 'blue');
+                    } else { // 既不是拳头也不是剪刀
+                        drawHammer(ctx, x, y, false, false, 'white'); 
+                    }
+                } else {
+                    // 单人模式或无限模式：仅识别拳头并默认为红锤
+                    const fistFormed = isFist(landmarks);
+                    const isPunching = fistFormed && movingDownFast;
+                    if (isPunching && gameActive) holes.forEach(h => h.character.checkHit(x - 60, y + 20, 1));
+                    drawHammer(ctx, x, y, isPunching && gameActive, fistFormed, 'red');
+                }
+            });
+        }
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    // --- MediaPipe 回调 ---
+    function isFist(landmarks) {
+        const wrist = landmarks[0], indexTip = landmarks[8], indexMCP = landmarks[5], pinkyTip = landmarks[20], pinkyMCP = landmarks[17];
+        const dTip = Math.hypot(indexTip.x - wrist.x, indexTip.y - wrist.y), dMCP = Math.hypot(indexMCP.x - wrist.x, indexMCP.y - wrist.y);
+        const pTip = Math.hypot(pinkyTip.x - wrist.x, pinkyTip.y - wrist.y), pMCP = Math.hypot(pinkyMCP.x - wrist.x, pinkyMCP.y - wrist.y);
+        return (dTip < dMCP * 1.0) && (pTip < pMCP * 1.0);
+    }
+
+    function isScissor(landmarks) {
+        const wrist = landmarks[0], indexTip = landmarks[8], middleTip = landmarks[12], ringTip = landmarks[16], pinkyTip = landmarks[20];
+        const indexMCP = landmarks[5], middleMCP = landmarks[9], ringMCP = landmarks[13], pinkyMCP = landmarks[17];
+        
+        // 判断手指是否伸展（指尖到手腕距离 > 掌根到手腕距离 * 1.1）
+        const indexExtended = Math.hypot(indexTip.x - wrist.x, indexTip.y - wrist.y) > Math.hypot(indexMCP.x - wrist.x, indexMCP.y - wrist.y) * 1.1;
+        const middleExtended = Math.hypot(middleTip.x - wrist.x, middleTip.y - wrist.y) > Math.hypot(middleMCP.x - wrist.x, middleMCP.y - wrist.y) * 1.1;
+        const ringCurled = Math.hypot(ringTip.x - wrist.x, ringTip.y - wrist.y) < Math.hypot(ringMCP.x - wrist.x, ringMCP.y - wrist.y) * 1.1;
+        const pinkyCurled = Math.hypot(pinkyTip.x - wrist.x, pinkyTip.y - wrist.y) < Math.hypot(pinkyMCP.x - wrist.x, pinkyMCP.y - wrist.y) * 1.1;
+        
+        return indexExtended && middleExtended && ringCurled && pinkyCurled;
+    }
+
+    function onResults(results) {
+        handsResults = results;
+    }
+
+    // --- UI 控制 ---
+    function hideAllModals() {
+        document.getElementById('mode-select-modal').style.display = 'none';
+        document.getElementById('game-over-modal').style.display = 'none';
+        document.getElementById('battle-over-modal').style.display = 'none';
+        document.getElementById('leaderboard-modal').style.display = 'none';
+        document.getElementById('infinite-controls').style.display = 'none';
+        document.getElementById('score-board').style.display = 'none';
+        document.getElementById('score-board-p2').style.display = 'none';
+        document.getElementById('timer-board').style.display = 'none';
+    }
+
+    function showModeSelect() {
+        hideAllModals(); gameActive = false; currentMode = null; stopTimer(); stopMusic();
+        holes.forEach(h => { if (h.character.state !== 'hidden') h.character.state = 'sinking_fast'; });
+        document.getElementById('mode-select-modal').style.display = 'block';
+    }
+
+    function startGame(mode) {
+        hideAllModals(); currentMode = mode; scoreP1 = 0; scoreP2 = 0; gameActive = true;
+        lastSpawnTime = performance.now(); 
+        prevHandY = {};
+        const boardP1 = document.getElementById('score-board'); const boardP2 = document.getElementById('score-board-p2');
+        if (mode === MODE_BATTLE) {
+            boardP1.innerText = 'P1 ✊: 0'; boardP1.style.display = 'block'; boardP1.style.color = '#ef4444';
+            boardP2.innerText = 'P2 ✌️: 0'; boardP2.style.display = 'block'; startTimer();
+        } else if (mode === MODE_QUICKPLAY) {
+            boardP1.innerText = '分数: 0'; boardP1.style.display = 'block'; boardP1.style.color = '#fbbf24';
+            boardP2.style.display = 'none'; startTimer();
+        } else if (mode === MODE_INFINITE) {
+            boardP1.innerText = '分数: 0'; boardP1.style.display = 'block'; boardP1.style.color = '#fbbf24';
+            boardP2.style.display = 'none'; document.getElementById('infinite-controls').style.display = 'block';
+        }
+        startMusic();
+    }
+
+    function init() {
+        videoElement = document.getElementById('input_video');
+        canvas = document.getElementById('output_canvas');
+        ctx = canvas.getContext('2d');
+        resizeCanvas(); initHoles(); initClouds(); initBirds(); generateGrass();
+
+        lastRenderTime = performance.now();
+        requestAnimationFrame(gameLoop);
+
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }});
+        hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        hands.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); }
+        });
+
+        camera.start()
+            .then(() => {
+                document.getElementById('loading').classList.add('hidden');
+                showModeSelect();
+            })
+            .catch(err => {
+                console.error("[CONSOLE_ERROR] Failed to acquire camera feed:", err);
+                document.getElementById('loading').innerHTML = `
+                    <div style="color: #ef4444; font-size: 1.1rem; text-align: left; background: rgba(0,0,0,0.8); padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                        <p style="font-size:1.8rem; margin-bottom:15px; text-align: center; font-weight: bold;">⚠️ 无法读取摄像头画面</p>
+                        <p style="color: #fff; line-height:1.8;">
+                            系统报错 <b>NotReadableError</b>，这通常意味着您的摄像头被系统或硬件锁定了。<br><br>
+                            <b>👉 请尝试以下操作：</b><br>
+                            1. <b>关闭其他应用：</b> 检查是否有其他软件（如微信视频、腾讯会议、Zoom 或其他浏览器标签页）正在占用摄像头，请完全退出它们。<br>
+                            2. <b>检查物理开关：</b> 部分笔记本电脑（如联想、惠普）键盘上或摄像头旁边有物理防窥开关/快捷键，请确保已打开。<br>
+                            3. <b>系统隐私设置：</b> 去 Windows/Mac 的“设置 -> 隐私 -> 摄像头”中，确保允许您的浏览器访问摄像头。<br>
+                            4. <b>重启浏览器：</b> 如果以上都不行，请彻底关闭浏览器后重新打开试试。
+                        </p>
+                        <p style="font-size:0.85rem; color:#aaa; margin-top:20px; text-align: center;">技术细节: ${err.name || 'Error'}: ${err.message}</p>
+                    </div>`;
+            });
+
+        window.addEventListener('resize', () => { resizeCanvas(); initHoles(); initBirds(); generateGrass(); });
+        document.getElementById('mode-quickplay-btn').addEventListener('click', () => startGame(MODE_QUICKPLAY));
+        document.getElementById('mode-battle-btn').addEventListener('click', () => startGame(MODE_BATTLE));
+        document.getElementById('mode-infinite-btn').addEventListener('click', () => startGame(MODE_INFINITE));
+        
+        document.getElementById('submit-score-btn').addEventListener('click', async () => {
+            const nameInput = document.getElementById('player-name');
+            const name = nameInput.value.trim();
+            const errorEl = document.getElementById('submit-error');
+            if (!name || name.length === 0) { errorEl.textContent = '请输入名字或点击跳过!'; errorEl.style.display = 'block'; return; }
+            const btn = document.getElementById('submit-score-btn');
+            btn.disabled = true; btn.textContent = '提交中...'; errorEl.style.display = 'none';
+            try {
+                await submitScore(name, scoreP1, MODE_QUICKPLAY);
+                document.getElementById('game-over-modal').style.display = 'none';
+                await showLeaderboard([{ name, score: scoreP1 }], MODE_QUICKPLAY);
+            } catch (err) {
+                errorEl.textContent = '提交失败，请重试'; errorEl.style.display = 'block';
+            } finally { btn.disabled = false; btn.textContent = '提交分数'; }
+        });
+        document.getElementById('player-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('submit-score-btn').click(); });
+        document.getElementById('skip-score-btn').addEventListener('click', async () => { document.getElementById('game-over-modal').style.display = 'none'; await showLeaderboard([], MODE_QUICKPLAY); });
+
+        document.getElementById('battle-submit-btn').addEventListener('click', async () => {
+            const p1Name = document.getElementById('battle-p1-name').value.trim(); const p2Name = document.getElementById('battle-p2-name').value.trim();
+            const errorEl = document.getElementById('battle-submit-error');
+            if (!p1Name && !p2Name) { errorEl.textContent = '至少输入一个名字，或点击跳过!'; errorEl.style.display = 'block'; return; }
+            const btn = document.getElementById('battle-submit-btn'); btn.disabled = true; btn.textContent = '提交中...'; errorEl.style.display = 'none';
+            try {
+                const highlights = [];
+                if (p1Name) { await submitScore(p1Name, scoreP1, MODE_BATTLE); highlights.push({ name: p1Name, score: scoreP1 }); }
+                if (p2Name) { await submitScore(p2Name, scoreP2, MODE_BATTLE); highlights.push({ name: p2Name, score: scoreP2 }); }
+                document.getElementById('battle-over-modal').style.display = 'none';
+                await showLeaderboard(highlights, MODE_BATTLE);
+            } catch (err) { errorEl.textContent = '提交失败'; errorEl.style.display = 'block'; } finally { btn.disabled = false; btn.textContent = '提交分数'; }
+        });
+        document.getElementById('battle-skip-btn').addEventListener('click', async () => { document.getElementById('battle-over-modal').style.display = 'none'; await showLeaderboard([], MODE_BATTLE); });
+
+        document.getElementById('play-again-btn').addEventListener('click', () => { document.getElementById('leaderboard-modal').style.display = 'none'; if (currentMode) startGame(currentMode); else showModeSelect(); });
+        document.getElementById('back-to-menu-btn').addEventListener('click', () => showModeSelect());
+        document.getElementById('infinite-back-btn').addEventListener('click', () => showModeSelect());
+    }
+
+    function resizeCanvas() {
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight; width = canvas.width; height = canvas.height;
+    }
+
+    init();
+
+</script>
+</body>
+</html>
